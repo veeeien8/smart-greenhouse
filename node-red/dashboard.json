@@ -1,0 +1,384 @@
+[
+  {
+    "id": "sgas-flow",
+    "type": "tab",
+    "label": "SGAS Greenhouse",
+    "disabled": false,
+    "info": "Run python leaf_server.py to serve existing BMPs. No conversion or Pillow required. Each teammate runs their own copy. See LEAF_WORKFLOW.md."
+  },
+  {
+    "id": "sgas-info",
+    "type": "comment",
+    "z": "sgas-flow",
+    "name": "Dashboard 2.0 | /dashboard/greenhouse | See node info",
+    "info": "Python serves existing BMPs on port 8000. Node-RED loads http://127.0.0.1:8000/api/leaves; Wokwi uses host.wokwi.internal:8000. Paths are relative to the Python script. Each teammate runs their own copy.",
+    "x": 330,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "sgas-in",
+    "type": "mqtt in",
+    "z": "sgas-flow",
+    "name": "ESP32 telemetry",
+    "topic": "sgas/vietanh/telemetry",
+    "qos": "0",
+    "datatype": "auto-detect",
+    "broker": "sgas-broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 140,
+    "y": 160,
+    "wires": [
+      [
+        "sgas-parse"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-parse",
+    "type": "function",
+    "z": "sgas-flow",
+    "name": "Validate and timestamp",
+    "func": "let p = msg.payload;\ntry { if (typeof p === \"string\") p = JSON.parse(p); } catch (e) { node.warn(\"Invalid telemetry JSON\"); return null; }\nif (!p || typeof p !== \"object\" || Array.isArray(p)) return null;\nif (![\"NORMAL\",\"HOT\",\"COLD\",\"HUMID\",\"DRY\",\"LOW LIGHT\",\"ALERT\"].includes(p.state)) return null;\nfor (const key of [\"vent\",\"heater\",\"humidifier\",\"growLight\",\"alert\"]) {\n  if (typeof p[key] !== \"boolean\") return null;\n}\nfor (const key of [\"temperature\",\"humidity\"]) {\n  if (p[key] !== null && (typeof p[key] !== \"number\" || !Number.isFinite(p[key]))) return null;\n}\nif (typeof p.light !== \"number\" || !Number.isFinite(p.light) || p.light < 0 || p.light > 4095) return null;\nif (p.alert) p = {...p, temperature:null, humidity:null};\nreturn {kind:'telemetry', payload:p, receivedAt:Date.now()};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 160,
+    "wires": [
+      [
+        "sgas-state"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-ui",
+    "type": "ui-template",
+    "z": "sgas-flow",
+    "group": "sgas-group",
+    "page": "",
+    "ui": "",
+    "name": "Greenhouse dashboard",
+    "order": 1,
+    "width": "12",
+    "height": "0",
+    "head": "",
+    "format": "<template>\n<section class=\"sgas\">\n  <header><div><small>3707ICT · SMART GREENHOUSE</small><h1>Greenhouse overview</h1></div><span :class=\"['sgas-pill', fresh ? 'sgas-good' : 'sgas-warn']\">{{ fresh ? 'Receiving telemetry' : (received ? 'Telemetry stale' : 'Waiting for telemetry') }}</span></header>\n  <p class=\"sgas-muted\">Last received: {{ received ? new Date(received).toLocaleString() : '—' }} · Automatic control</p>\n  <div class=\"sgas-grid\">\n    <article v-for=\"s in sensors\" :key=\"s.key\" class=\"sgas-card\">\n      <h3>{{ s.label }}</h3><div class=\"sgas-value\">{{ reading(s.key) }} <small>{{ s.unit }}</small></div>\n      <progress :value=\"level(s)\" max=\"100\" :aria-label=\"s.label\"></progress>\n      <p>{{ s.note }}</p>\n    </article>\n  </div>\n  <div class=\"sgas-grid sgas-bottom\">\n    <article class=\"sgas-card\"><h3>System status</h3><h2>{{ payload.state || 'Waiting' }}</h2><p :class=\"payload.alert ? 'sgas-danger' : ''\">{{ payload.alert === true ? 'DHT22 sensor fault — temperature and humidity unavailable' : payload.alert === false ? 'No sensor fault reported' : 'Waiting for sensor status' }}</p><p v-if=\"received && !fresh\" class=\"sgas-danger\">Readings and actuator states below are the last known values.</p></article>\n    <article class=\"sgas-card\"><h3>Actuators</h3><div v-for=\"a in actuators\" :key=\"a.key\" class=\"sgas-row\"><span>{{ a.label }}</span><strong>{{ state(a.key, a.on, a.off) }}</strong></div></article>\n    <article class=\"sgas-card\"><h3>Plant health</h3>\n      <label for=\"sgas-leaf\">Choose a local leaf ({{ leaves.length }} available)</label>\n      <select id=\"sgas-leaf\" v-model=\"selectedLeaf\" :disabled=\"busy\" class=\"sgas-select\">\n        <option disabled value=\"\">Select a leaf</option>\n        <option v-for=\"leaf in leaves\" :key=\"leaf.id\" :value=\"leaf.id\">{{ leaf.name }}</option>\n      </select>\n      <p v-if=\"leafError\" class=\"sgas-danger\">{{ leafError }}</p>\n      <div class=\"sgas-actions\"><v-btn variant=\"outlined\" :disabled=\"busy\" @click=\"send({action:'refresh'})\">Refresh leaves</v-btn>\n      <v-btn color=\"primary\" :disabled=\"!fresh || !selectedLeaf || busy\" @click=\"classify\">Classify leaf</v-btn></div>\n      <p v-if=\"busy\">Waiting for the ESP32 prediction…</p>\n      <p v-if=\"timedOut\" class=\"sgas-danger\">No result received within 90 seconds. Check the leaf server and Wokwi Serial Monitor, then retry.</p>\n      <div v-if=\"result\" class=\"sgas-result\" aria-live=\"polite\">\n        <strong>{{ result.status === 'done' ? result.prediction : result.status === 'running' ? 'Classifying…' : 'Classification failed' }}</strong>\n        <p v-if=\"result.status === 'done'\">Disease probability: {{ (result.probability * 100).toFixed(1) }}%</p>\n        <p v-if=\"result.error\" class=\"sgas-danger\">{{ result.error }}</p>\n        <small>{{ resultName }} · {{ new Date(result.receivedAt).toLocaleTimeString() }}</small>\n      </div>\n      <small>Run leaf_server.py to serve existing BMPs. The ESP32 model classifies the selected leaf.</small>\n    </article>\n  </div>\n</section>\n</template>\n<script>\nexport default {\n  data() {\n    return {\n      now: Date.now(), timer: null, selectedLeaf: '', requestedAt: 0, requestedLeaf: '',\n      sensors: [\n        {key:'temperature',label:'Temperature',unit:'°C',min:-40,max:80,note:'Cold below 18°C · Hot above 30°C'},\n        {key:'humidity',label:'Humidity',unit:'%',min:0,max:100,note:'Dry below 40% · Humid above 80%'},\n        {key:'light',label:'Light sensor',unit:'ADC',min:0,max:4095,note:'Higher means darker · Low light above 2500'}\n      ],\n      actuators: [\n        {key:'vent',label:'Ventilation',on:'OPEN',off:'CLOSED'},\n        {key:'heater',label:'Heater',on:'ON',off:'OFF'},\n        {key:'humidifier',label:'Humidifier',on:'ON',off:'OFF'},\n        {key:'growLight',label:'Grow light',on:'ON',off:'OFF'}\n      ]\n    }\n  },\n  computed: {\n    payload() { return this.msg?.payload || {} },\n    received() { return this.msg?.receivedAt || 0 },\n    fresh() { return this.received > 0 && this.now - this.received < 15000 },\n    leaves() { return this.msg?.leaves || [] },\n    leafError() { return this.msg?.leafError || '' },\n    result() { return this.msg?.result || null },\n    resultName() { return this.leaves.find(l => l.id === this.result?.leafId)?.name || this.result?.leafId || 'Selected leaf' },\n    completed() { return this.result && this.result.leafId === this.requestedLeaf && this.result.receivedAt >= this.requestedAt && ['done','error'].includes(this.result.status) },\n    busy() { return this.requestedAt > 0 && !this.completed && this.now - this.requestedAt < 90000 },\n    timedOut() { return this.requestedAt > 0 && !this.completed && this.now - this.requestedAt >= 90000 }\n  },\n  watch: {\n    leaves(list) { if (!list.some(l => l.id === this.selectedLeaf)) this.selectedLeaf = '' }\n  },\n  methods: {\n    reading(key) {\n      const v = this.payload[key];\n      return typeof v === 'number' && Number.isFinite(v) ? (key === 'light' ? v : v.toFixed(1)) : '—';\n    },\n    level(s) {\n      const v = this.payload[s.key];\n      return typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, (v-s.min)/(s.max-s.min)*100)) : 0;\n    },\n    state(key, on, off) { return this.payload[key] === true ? on : this.payload[key] === false ? off : '—' },\n    classify() {\n      this.requestedAt = Date.now();\n      this.requestedLeaf = this.selectedLeaf;\n      this.now = this.requestedAt;\n      this.send({action:'classify', leafId:this.selectedLeaf});\n    }\n  },\n  mounted() { this.timer = setInterval(() => { this.now = Date.now() }, 1000); this.send({action:'refresh'}) },\n  unmounted() { clearInterval(this.timer) }\n}\n</script>\n<style>\n.sgas {padding:20px;color:#183b30;background:#f4f8f5;border-radius:16px}\n.sgas header {display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}\n.sgas h1 {font-size:28px;margin:4px 0}.sgas h2{margin:12px 0}.sgas h3{font-size:15px;margin:0 0 16px}\n.sgas small,.sgas-muted{color:#567165}.sgas p{font-size:14px;margin:12px 0}\n.sgas-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:20px}\n.sgas-card{background:white;border:1px solid #dce8df;border-radius:12px;padding:20px}\n.sgas-value{font-size:38px;font-weight:700}.sgas-value small{font-size:18px}\n.sgas progress{width:100%;height:10px;accent-color:#24835b;margin-top:16px}\n.sgas-pill{border-radius:20px;padding:8px 14px;font-size:13px;font-weight:600}\n.sgas-good{background:#d9f0e2;color:#165d36}.sgas-warn{background:#fff0cd;color:#785300}\n.sgas-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eef3ef}\n.sgas-select{width:100%;padding:10px;border:1px solid #9fbaaa;border-radius:6px;margin:8px 0 12px;background:white}\n.sgas-actions{display:flex;flex-wrap:wrap;gap:8px}.sgas-result{margin:16px 0;padding:12px;background:#f1f7f2;border-radius:8px;overflow-wrap:anywhere}\n.sgas .sgas-danger{color:#b3261e}\n@media(max-width:850px){.sgas-grid{grid-template-columns:1fr}.sgas{padding:12px}}\n</style>",
+    "storeOutMessages": false,
+    "passthru": false,
+    "resendOnRefresh": true,
+    "templateScope": "local",
+    "className": "",
+    "x": 900,
+    "y": 160,
+    "wires": [
+      [
+        "sgas-command"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-command",
+    "type": "function",
+    "z": "sgas-flow",
+    "name": "Classify selected leaf / refresh",
+    "func": "if (msg.action === \"refresh\") return [null, {}];\nconst leaves = flow.get(\"sgasLeaves\") || [];\nif (msg.action !== \"classify\" || !/^[a-f0-9]{16}$/.test(msg.leafId || \"\") ||\n    !leaves.some(leaf => leaf.id === msg.leafId)) return null;\nreturn [{payload:\"CLASSIFY:\" + msg.leafId, topic:\"sgas/vietanh/command\", qos:\"0\", retain:false}, null];",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 610,
+    "y": 260,
+    "wires": [
+      [
+        "sgas-out"
+      ],
+      [
+        "sgas-catalog-http"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-out",
+    "type": "mqtt out",
+    "z": "sgas-flow",
+    "name": "Request leaf classification",
+    "topic": "sgas/vietanh/command",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "sgas-broker",
+    "x": 880,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "sgas-broker",
+    "type": "mqtt-broker",
+    "name": "HiveMQ public — SGAS",
+    "broker": "broker.hivemq.com",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": "",
+    "willMsg": {}
+  },
+  {
+    "id": "sgas-base",
+    "type": "ui-base",
+    "name": "SGAS Dashboard",
+    "path": "/dashboard",
+    "appIcon": "",
+    "includeClientData": true,
+    "acceptsClientConfig": [
+      "ui-notification",
+      "ui-control"
+    ],
+    "showPathInSidebar": false,
+    "headerContent": "page",
+    "navigationStyle": "default",
+    "titleBarStyle": "default",
+    "showReconnectNotification": true,
+    "notificationDisplayTime": 1,
+    "showDisconnectNotification": true,
+    "allowInstall": false
+  },
+  {
+    "id": "sgas-page",
+    "type": "ui-page",
+    "name": "Smart Greenhouse",
+    "ui": "sgas-base",
+    "path": "/greenhouse",
+    "icon": "eco",
+    "layout": "grid",
+    "theme": "sgas-theme",
+    "breakpoints": [
+      {
+        "name": "Default",
+        "px": "0",
+        "cols": "3"
+      },
+      {
+        "name": "Tablet",
+        "px": "576",
+        "cols": "6"
+      },
+      {
+        "name": "Small Desktop",
+        "px": "768",
+        "cols": "9"
+      },
+      {
+        "name": "Desktop",
+        "px": "1024",
+        "cols": "12"
+      }
+    ],
+    "order": 1,
+    "className": "",
+    "visible": "true",
+    "disabled": "false"
+  },
+  {
+    "id": "sgas-group",
+    "type": "ui-group",
+    "name": "Live monitoring",
+    "page": "sgas-page",
+    "width": "12",
+    "height": "1",
+    "order": 1,
+    "showTitle": false,
+    "className": "",
+    "visible": "true",
+    "disabled": "false",
+    "groupType": "default"
+  },
+  {
+    "id": "sgas-theme",
+    "type": "ui-theme",
+    "name": "Greenhouse",
+    "colors": {
+      "surface": "#ffffff",
+      "primary": "#24835b",
+      "bgPage": "#edf4ef",
+      "groupBg": "#ffffff",
+      "groupOutline": "#dce8df"
+    },
+    "sizes": {
+      "density": "default",
+      "pagePadding": "12px",
+      "groupGap": "12px",
+      "groupBorderRadius": "12px",
+      "widgetGap": "12px"
+    }
+  },
+  {
+    "id": "sgas-state",
+    "type": "function",
+    "z": "sgas-flow",
+    "name": "Combine dashboard state",
+    "func": "const state = context.get(\"state\") || {payload:{}, receivedAt:0, leaves:[], leafError:\"\", result:null};\nif (msg.kind === \"telemetry\") { state.payload=msg.payload; state.receivedAt=msg.receivedAt; }\nelse if (msg.kind === \"leaves\") {\n  state.leaves=msg.payload; state.leafError=msg.leafError || \"\";\n  flow.set(\"sgasLeaves\", state.leaves);\n} else if (msg.kind === \"result\") { state.result={...msg.payload, receivedAt:Date.now()}; }\nelse return null;\ncontext.set(\"state\", state);\nreturn {...state};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 650,
+    "y": 160,
+    "wires": [
+      [
+        "sgas-ui"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-refresh",
+    "type": "inject",
+    "z": "sgas-flow",
+    "name": "Load leaves at startup",
+    "props": [],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1",
+    "topic": "",
+    "x": 160,
+    "y": 380,
+    "wires": [
+      [
+        "sgas-catalog-http"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-catalog-http",
+    "z": "sgas-flow",
+    "x": 440,
+    "y": 380,
+    "wires": [
+      [
+        "sgas-catalog-parse"
+      ]
+    ],
+    "type": "http request",
+    "name": "Leaf server catalog (port 8000)",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:8000/api/leaves",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "requestTimeout": "5000"
+  },
+  {
+    "id": "sgas-catalog-parse",
+    "type": "function",
+    "z": "sgas-flow",
+    "name": "Validate leaf catalog",
+    "func": "if (msg.error || msg.statusCode !== 200 || !Array.isArray(msg.payload) ||\n !msg.payload.every(l => l && /^[a-f0-9]{16}$/.test(l.id) && typeof l.name === \"string\")) {\n return {kind:\"leaves\",payload:[],leafError:\"Leaf server unavailable. Run python leaf_server.py, then Refresh leaves.\"};\n}\nreturn {kind:\"leaves\",payload:msg.payload};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 710,
+    "y": 380,
+    "wires": [
+      [
+        "sgas-state"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-catalog-error",
+    "type": "catch",
+    "z": "sgas-flow",
+    "name": "Leaf server connection errors",
+    "scope": [
+      "sgas-catalog-http"
+    ],
+    "uncaught": false,
+    "x": 450,
+    "y": 440,
+    "wires": [
+      [
+        "sgas-catalog-parse"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-result-in",
+    "type": "mqtt in",
+    "z": "sgas-flow",
+    "name": "ESP32 classification results",
+    "topic": "sgas/vietanh/classification",
+    "qos": "0",
+    "datatype": "auto-detect",
+    "broker": "sgas-broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 160,
+    "y": 520,
+    "wires": [
+      [
+        "sgas-result-parse"
+      ]
+    ]
+  },
+  {
+    "id": "sgas-result-parse",
+    "type": "function",
+    "z": "sgas-flow",
+    "name": "Validate prediction",
+    "func": "let p=msg.payload;\ntry { if (typeof p === \"string\") p=JSON.parse(p); } catch(e) { return null; }\nif (!p || !/^[a-f0-9]{16}$/.test(p.leafId || \"\") || ![\"running\",\"done\",\"error\"].includes(p.status)) return null;\nif (p.status === \"done\" && (![\"HEALTHY\",\"DISEASED\"].includes(p.prediction) ||\n    typeof p.probability !== \"number\" || !Number.isFinite(p.probability) || p.probability < 0 || p.probability > 1)) return null;\nif (p.status === \"error\" && typeof p.error !== \"string\") return null;\nreturn {kind:\"result\",payload:p};",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 440,
+    "y": 520,
+    "wires": [
+      [
+        "sgas-state"
+      ]
+    ]
+  }
+]

@@ -1,0 +1,3 @@
+#pragma once
+
+const char* THINGSPEAK_WRITE_API_KEY = "YOUR ACTUAL WRITE API";
