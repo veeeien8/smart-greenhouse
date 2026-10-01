@@ -34,13 +34,13 @@ flowchart LR
 
 ### Components
 
-| Component             | Purpose                                                                    |
-| --------------------- | -------------------------------------------------------------------------- |
-| Wokwi + ESP32         | Simulates the embedded controller, sensor inputs, actuators, and inference |
-| Python Leaf Server    | Provides leaf images to the ESP32 on local port **8000**                   |
-| HiveMQ public broker  | Relays telemetry, classification commands, and results                     |
-| Node-RED              | Imports the supplied JSON flow and provides the monitoring interface       |
-| ThingSpeak            | Stores periodic sensor and actuator data for historical analysis           |
+| Component | Purpose |
+| --- | --- |
+| Wokwi + ESP32 | Simulates the embedded controller, sensor inputs, actuators, and inference |
+| Python Leaf Server | Provides leaf images to the ESP32 on local port **8000** |
+| HiveMQ public broker | Relays telemetry, classification commands, and results |
+| Node-RED | Imports the supplied JSON flow and provides the monitoring interface |
+| ThingSpeak | Stores periodic sensor and actuator data for historical analysis |
 
 ## Repository layout
 
@@ -277,28 +277,28 @@ Here, `probability` is the model's **disease-class probability**, not a general 
 3. Supply your **own** Write API Key in the local firmware configuration and restart the simulation.
 4. Open your channel's **Private View** (or a public view only if you deliberately made the channel public).
 
-| ThingSpeak field | Data                       |
-| ---------------- | -------------------------- |
-| Field 1          | Temperature (°C)           |
-| Field 2          | Humidity (%)               |
-| Field 3          | Light ADC reading          |
-| Field 4          | Vent open (`0` or `1`)     |
-| Field 5          | Heater on (`0` or `1`)     |
-| Field 6          | Humidifier on (`0` or `1`) |
-| Field 7          | Grow light on (`0` or `1`) |
-| Field 8          | Sensor fault (`0` or `1`)  |
+| ThingSpeak field | Data |
+| --- | --- |
+| Field 1 | Temperature (°C) |
+| Field 2 | Humidity (%) |
+| Field 3 | Light ADC reading |
+| Field 4 | Vent open (`0` or `1`) |
+| Field 5 | Heater on (`0` or `1`) |
+| Field 6 | Humidifier on (`0` or `1`) |
+| Field 7 | Grow light on (`0` or `1`) |
+| Field 8 | Sensor fault (`0` or `1`) |
 
 The firmware attempts uploads about every **20 seconds** once ready (first eligible attempt after approximately 10 seconds). Look for `ThingSpeak HTTP response:` and an entry ID in the Serial Monitor to diagnose uploads.
 
 ## Local automation rules
 
-| Condition                     | System response                                                   |
-| ----------------------------- | ----------------------------------------------------------------- |
-| Temperature **> 30°C**        | Open vent (unless cold condition takes priority)                  |
-| Temperature **< 18°C**        | Turn on heater and close vent                                     |
-| Humidity **> 80%**            | Open vent unless the greenhouse is cold                           |
-| Humidity **< 40%**            | Turn on humidifier                                                |
-| LDR reading **> 2500**        | Turn on grow light                                                |
+| Condition | System response |
+| --- | --- |
+| Temperature **> 30°C** | Open vent (unless cold condition takes priority) |
+| Temperature **< 18°C** | Turn on heater and close vent |
+| Humidity **> 80%** | Open vent unless the greenhouse is cold |
+| Humidity **< 40%** | Turn on humidifier |
+| LDR reading **> 2500** | Turn on grow light |
 | DHT22 invalid or out of range | Set `ALERT`, disable DHT-dependent actuators, and activate buzzer |
 
 The thresholds use **hysteresis**: hot clears below 27°C, cold clears above 20°C, humid clears below 70%, dry clears above 50%, and low light clears below an ADC reading of 1800. More than one condition can be active at a time. The control loop switches between about **2,000 ms** in normal conditions and **500 ms** during alerts or abnormal states; physical DHT readings remain limited to every **2,000 ms**.
@@ -307,25 +307,27 @@ The thresholds use **hysteresis**: hot clears below 27°C, cold clears above 20�
 
 All three topics use the same configurable prefix in `main.ino` and Node-RED:
 
-| Direction         | Topic suffix      | Payload                                         |
-| ----------------- | ----------------- | ----------------------------------------------- |
-| ESP32 → dashboard | `/telemetry`      | JSON environmental readings and actuator states |
-| Dashboard → ESP32 | `/command`        | `CLASSIFY:<16 lowercase hex characters>`        |
-| ESP32 → dashboard | `/classification` | JSON status, prediction, probability, or error  |
+| Direction | Topic suffix | Payload |
+| --- | --- | --- |
+| ESP32 → dashboard | `/telemetry` | JSON environmental readings and actuator states |
+| Dashboard → ESP32 | `/command` | `CLASSIFY:<16 lowercase hex characters>` |
+| ESP32 → dashboard | `/classification` | JSON status, prediction, probability, or error 
 
 The firmware currently uses `broker.hivemq.com:1883` without MQTT authentication or TLS. This is suitable only for a non-sensitive demo; do not expose real equipment or sensitive information through the public command topic.
 
 ## Troubleshooting
 
-- Wokwi cannot download image: Is the Leaf Server running on port 8000? Is Wokwi using the private IoT gateway? Does `GET /leaves/<id>.bmp` return a valid BMP?
-- HTTP 404 when classifying: The server does not have an image associated with the requested leaf ID.
-- `Image must be 64x64`: Resize/convert the leaf image to **64 × 64** BMP.
-- `Image must be uncompressed 24-bit BMP`: Convert the image to uncompressed **24-bit RGB BMP**.
-- Dashboard shows no data: Check Node-RED Deploy status, MQTT broker settings, exact topic names, and Wokwi Serial Monitor.
-- TinyML initialization fails: Check `model_data.h`, INT8 model input/output shape, and available ESP32 heap.
-- No ThingSpeak updates: Verify the local Write API Key, channel field setup, Wi-Fi connectivity, and HTTP response/entry ID.
-- Node-RED reports missing nodes: Install the packages required by the imported flow using **Manage palette**.
-- Wokwi simulation runs but cannot see host server: Confirm `host.wokwi.internal` resolves through the **Private IoT Gateway**, not a browser-only public network configuration.
+| Symptom | What to check |
+| --- | --- |
+| Wokwi cannot download image | Is the Leaf Server running on port 8000? Is Wokwi using the private IoT gateway? Does `GET /leaves/<id>.bmp` return a valid BMP? |
+| HTTP 404 when classifying | The server does not have an image associated with the requested leaf ID. |
+| `Image must be 64x64` | Resize/convert the leaf image to **64 × 64** BMP. |
+| `Image must be uncompressed 24-bit BMP` | Convert the image to uncompressed **24-bit RGB BMP**. |
+| Dashboard shows no data | Check Node-RED Deploy status, MQTT broker settings, exact topic names, and Wokwi Serial Monitor. |
+| TinyML initialization fails | Check `model_data.h`, INT8 model input/output shape, and available ESP32 heap. |
+| No ThingSpeak updates | Verify the local Write API Key, channel field setup, Wi-Fi connectivity, and HTTP response/entry ID. |
+| Node-RED reports missing nodes | Install the packages required by the imported flow using **Manage palette**. |
+| Wokwi simulation runs but cannot see host server | Confirm `host.wokwi.internal` resolves through the **Private IoT Gateway**, not a browser-only public network configuration. |
 
 ## Security notes
 
