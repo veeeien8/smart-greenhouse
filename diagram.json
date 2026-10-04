@@ -24,8 +24,8 @@
     {
       "type": "wokwi-led",
       "id": "led1",
-      "top": 111.6,
-      "left": -197.4,
+      "top": -22.8,
+      "left": -197.8,
       "attrs": { "color": "red", "flip": "" }
     },
     {
@@ -39,8 +39,8 @@
     {
       "type": "wokwi-led",
       "id": "led2",
-      "top": 111.6,
-      "left": -235.8,
+      "top": -22.8,
+      "left": -236.2,
       "attrs": { "color": "limegreen", "flip": "" }
     },
     {
@@ -54,7 +54,7 @@
     {
       "type": "wokwi-led",
       "id": "led3",
-      "top": 111.6,
+      "top": -22.8,
       "left": -149.8,
       "attrs": { "color": "blue", "flip": "" }
     },
@@ -70,9 +70,58 @@
       "type": "wokwi-buzzer",
       "id": "bz1",
       "top": 326.4,
-      "left": -172.8,
+      "left": -144,
       "rotate": 180,
       "attrs": { "volume": "0.1" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text1",
+      "top": -9.6,
+      "left": -316.8,
+      "attrs": { "text": "Grow Light\n", "color": "#48e850" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text2",
+      "top": -38.4,
+      "left": -201.6,
+      "attrs": { "text": "Heater\n", "color": "#48e850" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text3",
+      "top": -19.2,
+      "left": -115.2,
+      "attrs": { "text": "Humidifier", "color": "#48e850" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text4",
+      "top": 336,
+      "left": 336,
+      "attrs": { "text": "Ventilation" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text5",
+      "top": 38.4,
+      "left": -432,
+      "attrs": { "text": "DHT22" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text6",
+      "top": 345.6,
+      "left": -326.4,
+      "attrs": { "text": "LDR" }
+    },
+    {
+      "type": "wokwi-text",
+      "id": "text7",
+      "top": 355.2,
+      "left": -48,
+      "attrs": { "text": "System Fail Alert" }
     }
   ],
   "connections": [
@@ -90,22 +139,22 @@
     [ "servo1:V+", "esp:5V", "green", [ "h-192", "v-67.1" ] ],
     [ "servo1:GND", "bb1:bn.11", "black", [ "h0" ] ],
     [ "bb1:12b.j", "esp:13", "green", [ "v0" ] ],
-    [ "bb1:16b.j", "esp:26", "green", [ "v0", "h201.6", "v-28.8" ] ],
-    [ "bz1:1", "bb1:bn.17", "black", [ "v0" ] ],
-    [ "bz1:2", "esp:25", "green", [ "v-9.6", "h134.8", "v-182.4" ] ],
-    [ "esp:27", "bb1:21b.i", "green", [ "h-57.45", "v19.2" ] ],
-    [ "led1:A", "bb1:16b.g", "", [ "$bb" ] ],
-    [ "led1:C", "bb1:15b.g", "", [ "$bb" ] ],
+    [ "bb1:16b.j", "esp:26", "green", [ "h192", "v-38.4" ] ],
+    [ "bz1:2", "esp:25", "red", [ "v-9.6", "h134.8", "v-182.4" ] ],
+    [ "esp:27", "bb1:21b.i", "green", [ "h-38.25", "v19.2" ] ],
     [ "r1:1", "bb1:20b.h", "", [ "$bb" ] ],
     [ "r1:2", "bb1:bn.16", "", [ "$bb" ] ],
-    [ "led2:A", "bb1:12b.g", "", [ "$bb" ] ],
-    [ "led2:C", "bb1:11b.g", "", [ "$bb" ] ],
     [ "r2:1", "bb1:11b.h", "", [ "$bb" ] ],
     [ "r2:2", "bb1:bn.9", "", [ "$bb" ] ],
-    [ "led3:A", "bb1:21b.g", "", [ "$bb" ] ],
-    [ "led3:C", "bb1:20b.g", "", [ "$bb" ] ],
     [ "r3:1", "bb1:15b.h", "", [ "$bb" ] ],
-    [ "r3:2", "bb1:bn.12", "", [ "$bb" ] ]
+    [ "r3:2", "bb1:bn.12", "", [ "$bb" ] ],
+    [ "led2:C", "bb1:11b.f", "green", [ "v0" ] ],
+    [ "bb1:12b.f", "led2:A", "green", [ "v0" ] ],
+    [ "led1:C", "bb1:15b.f", "green", [ "v0" ] ],
+    [ "bb1:16b.f", "led1:A", "green", [ "v0" ] ],
+    [ "led3:C", "bb1:20b.f", "green", [ "v0" ] ],
+    [ "bb1:21b.f", "led3:A", "green", [ "v0" ] ],
+    [ "bz1:1", "bb1:bn.20", "black", [ "v0" ] ]
   ],
   "dependencies": {}
 }
