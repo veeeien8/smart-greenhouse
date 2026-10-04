@@ -127,9 +127,9 @@ const char *WIFI_PASSWORD = "";
 
 const char *MQTT_BROKER = "broker.hivemq.com";
 const uint16_t MQTT_PORT = 1883;
-const char *MQTT_TELEMETRY_TOPIC = "your_topic/telemetry";
-const char *MQTT_COMMAND_TOPIC = "your_topic/command";
-const char *MQTT_CLASSIFICATION_TOPIC = "your_topic/classification";
+const char *MQTT_TELEMETRY_TOPIC = "sgas/your-name/telemetry";
+const char *MQTT_COMMAND_TOPIC = "sgas/your-name/command";
+const char *MQTT_CLASSIFICATION_TOPIC = "sgas/your-name/classification";
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
