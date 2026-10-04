@@ -63,8 +63,6 @@ smart-greenhouse/
 └── README.md
 ```
 
-**Do not commit** real API keys, `.env`, `secrets.h`, `.pio/`, Python virtual environments, or `__pycache__/`. The README assumes the Python server and Node-RED JSON are actually included in the repository.
-
 ## Prerequisites
 
 - [Git](https://git-scm.com/)
@@ -83,11 +81,9 @@ The system has **three running processes**: the Leaf Server, Node-RED, and the E
 Open a terminal and run:
 
 ```bash
-git clone https://github.com/<YOUR-USERNAME>/smart-greenhouse.git
+git clone https://github.com/veeeien8/smart-greenhouse.git
 cd smart-greenhouse
 ```
-
-Replace `<YOUR-USERNAME>` with the GitHub account hosting this repository.
 
 ### 2. Configure the ESP32 firmware
 
@@ -101,25 +97,20 @@ const char *WIFI_PASSWORD = "";
 
 const char *MQTT_BROKER = "broker.hivemq.com";
 const uint16_t MQTT_PORT = 1883;
-const char *MQTT_TELEMETRY_TOPIC = "your_topic/telemetry";
-const char *MQTT_COMMAND_TOPIC = "your_topic/command";
-const char *MQTT_CLASSIFICATION_TOPIC = "your_topic/classification";
+const char *MQTT_TELEMETRY_TOPIC = "sgas/your-name/telemetry";
+const char *MQTT_COMMAND_TOPIC = "sgas/your-name/command";
+const char *MQTT_CLASSIFICATION_TOPIC = "sgas/your-name/classification";
 ```
 
-Replace the `your_topic` prefix with a **unique** prefix and configure the same topics in Node-RED. Using a unique prefix reduces accidental interference between users of the public broker.
+Replace `your-name`  with a **unique** name and configure the same topics in Node-RED. Using a unique prefix reduces accidental interference between users of the public broker.
 
 **ThingSpeak configuration:** The publicly shared firmware contains a placeholder for `THINGSPEAK_WRITE_API_KEY`; it **will not upload** to ThingSpeak until a valid key is supplied. To keep a local working key out of Git history, the recommended setup is:
 
 1. Copy `src/secrets.example.h` to `src/secrets.h` (if the example file is included).
 2. Put your real key in `src/secrets.h`.
-3. Keep `secrets.h` in `.gitignore` and check that it is not already Git-tracked.
+3. Keep `secrets.h` in `.gitignore`.
 
 If the repository does not include `secrets.example.h`, create it as a template containing:
-
-```cpp
-#pragma once
-const char* THINGSPEAK_WRITE_API_KEY = "INSERT_YOUR_THINGSPEAK_WRITE_API_KEY";
-```
 
 ### 3. Start the Python Leaf Server
 
@@ -145,8 +136,6 @@ python leaf_server.py
 
 On Windows, `py leaf_server.py` may be used instead of `python leaf_server.py`.
 
-**Important:** If the repository contains a `requirements.txt`, install it first using `python -m pip install -r requirements.txt` from the appropriate directory. Consult the server source for any additional configuration.
-
 **Verify the server:** After creating/selecting a valid leaf ID using your server's workflow, open this address on the host computer:
 
 ```text
@@ -167,6 +156,15 @@ node-red
 
 If Node-RED has not been installed, follow the [official Node-RED installation instructions](https://nodered.org/docs/getting-started/local). A typical npm installation uses `npm install -g node-red`.
 
+If Node-RED fails to connect, try running this instead:
+
+```bash
+$env:NODE_OPTIONS = "--network-family-autoselection-attempt-timeout=3000"
+node-red
+```
+
+This gives Node.js more time to establish a network connection to your MQTT broker. It allows 3,000 milliseconds (3 seconds) for each connection attempt before moving to another address. That extra time can help on a slower network.
+
 Open the Node-RED editor:
 
 ```text
@@ -177,7 +175,7 @@ To import the supplied JSON:
 
 1. In the Node-RED editor, open the top-right menu (**☰**).
 2. Select **Import**.
-3. Choose the `node-red/dashboard.json` file (or its actual filename).
+3. Choose the `node-red/dashboard.json` file.
 4. Import the flow into a new tab or your existing workspace.
 5. Install any **missing node packages** reported by Node-RED through **Menu → Manage palette**. The required dashboard package depends on the node types inside the exported JSON (for example, classic Dashboard versus FlowFuse Dashboard 2.0).
 6. Open the imported **MQTT broker configuration node** and confirm the host is `broker.hivemq.com`, port `1883`, and its client ID does not collide with another client.
@@ -190,7 +188,6 @@ See the official [Node-RED flow import guide](https://nodered.org/docs/user-guid
 **Open the dashboard:**
 
 - If the JSON uses **FlowFuse Dashboard 2.0**, the default dashboard path is usually `http://localhost:1880/dashboard`.
-- If it uses the older **node-red-dashboard**, the default dashboard path is usually `http://localhost:1880/ui`.
 - If the imported flow configures a custom base path, use that path instead.
 
 The exact dashboard page structure and image-upload controls depend on `dashboard.json`.
