@@ -4,14 +4,14 @@
     "type": "tab",
     "label": "SGAS Greenhouse",
     "disabled": false,
-    "info": "Run python leaf_server.py to serve existing BMPs. No conversion or Pillow required. Each teammate runs their own copy. See LEAF_WORKFLOW.md."
+    "info": "Run python leaf_server.py to serve existing BMPs."
   },
   {
     "id": "sgas-info",
     "type": "comment",
     "z": "sgas-flow",
     "name": "Dashboard 2.0 | /dashboard/greenhouse | See node info",
-    "info": "Python serves existing BMPs on port 8000. Node-RED loads http://127.0.0.1:8000/api/leaves; Wokwi uses host.wokwi.internal:8000. Paths are relative to the Python script. Each teammate runs their own copy.",
+    "info": "Python serves existing BMPs on port 8000. Node-RED loads http://127.0.0.1:8000/api/leaves; Wokwi uses host.wokwi.internal:8000.",
     "x": 330,
     "y": 60,
     "wires": []
