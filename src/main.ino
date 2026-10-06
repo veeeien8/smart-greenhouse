@@ -348,20 +348,15 @@ bool loadBMPFromHTTPToTensor(const char* url)
 
   uint32_t pixelOffset = readLE32(&header[10]);
 
-  int32_t width =
-    (int32_t)readLE32(&header[18]);
+  int32_t width = (int32_t)readLE32(&header[18]);
 
-  int32_t height =
-    (int32_t)readLE32(&header[22]);
+  int32_t height = (int32_t)readLE32(&header[22]);
 
-  uint16_t planes =
-    readLE16(&header[26]);
+  uint16_t planes = readLE16(&header[26]);
 
-  uint16_t bitDepth =
-    readLE16(&header[28]);
+  uint16_t bitDepth = readLE16(&header[28]);
 
-  uint32_t compression =
-    readLE32(&header[30]);
+  uint32_t compression = readLE32(&header[30]);
 
   Serial.print("BMP dimensions: ");
   Serial.print(width);
@@ -380,9 +375,7 @@ bool loadBMPFromHTTPToTensor(const char* url)
       bitDepth != 24 ||
       compression != 0)
   {
-    Serial.println(
-      "ERROR: Image must be uncompressed 24-bit BMP."
-    );
+    Serial.println("ERROR: Image must be uncompressed 24-bit BMP.");
 
     http.end();
     return false;
@@ -398,8 +391,7 @@ bool loadBMPFromHTTPToTensor(const char* url)
     return false;
   }
 
-  uint32_t extraBytes =
-    pixelOffset - 54;
+  uint32_t extraBytes = pixelOffset - 54;
 
   if (extraBytes > 4096)
   {
@@ -420,37 +412,28 @@ bool loadBMPFromHTTPToTensor(const char* url)
   }
 
   // BMP rows are padded to multiples of 4 bytes.
-  uint32_t rowSize =
-    (width * 3 + 3) & ~3;
+  uint32_t rowSize = (width * 3 + 3) & ~3;
 
-  uint32_t padding =
-    rowSize - (width * 3);
+  uint32_t padding = rowSize - (width * 3);
 
-  bool topDown =
-    height < 0;
+  bool topDown = height < 0;
 
-  float inputScale =
-    tflInput->params.scale;
+  float inputScale = tflInput->params.scale;
 
-  int inputZeroPoint =
-    tflInput->params.zero_point;
+  int inputZeroPoint = tflInput->params.zero_point;
 
   uint8_t pixel[3];
 
   for (int row = 0; row < 64; row++)
   {
     // Standard BMP files store rows bottom-up.
-    int targetY =
-      topDown ? row : 63 - row;
+    int targetY = topDown ? row : 63 - row;
 
     for (int x = 0; x < 64; x++)
     {
       if (stream->readBytes(pixel, 3) != 3)
       {
-        Serial.println(
-          "ERROR: Unexpected end of image."
-        );
-
+        Serial.println("ERROR: Unexpected end of image.");
         http.end();
         return false;
       }
@@ -460,39 +443,25 @@ bool loadBMPFromHTTPToTensor(const char* url)
       uint8_t green = pixel[1];
       uint8_t red   = pixel[2];
 
-      // Same 0..1 preprocessing as training
+      // Normalize to [0,1] range
       float r = red   / 255.0f;
       float g = green / 255.0f;
       float b = blue  / 255.0f;
 
       // Float -> INT8
-      int qr =
-        round(r / inputScale)
-        + inputZeroPoint;
-
-      int qg =
-        round(g / inputScale)
-        + inputZeroPoint;
-
-      int qb =
-        round(b / inputScale)
-        + inputZeroPoint;
+      int qr = round(r / inputScale) + inputZeroPoint;
+      int qg = round(g / inputScale) + inputZeroPoint;
+      int qb = round(b / inputScale) + inputZeroPoint;
 
       qr = constrain(qr, -128, 127);
       qg = constrain(qg, -128, 127);
       qb = constrain(qb, -128, 127);
 
-      int index =
-        (targetY * 64 + x) * 3;
+      int index = (targetY * 64 + x) * 3;
 
-      tflInput->data.int8[index] =
-        (int8_t)qr;
-
-      tflInput->data.int8[index + 1] =
-        (int8_t)qg;
-
-      tflInput->data.int8[index + 2] =
-        (int8_t)qb;
+      tflInput->data.int8[index] = (int8_t)qr;
+      tflInput->data.int8[index + 1] = (int8_t)qg;
+      tflInput->data.int8[index + 2] = (int8_t)qb;
     }
 
     // Skip BMP row padding.
@@ -504,34 +473,9 @@ bool loadBMPFromHTTPToTensor(const char* url)
 
   http.end();
 
-  Serial.println(
-    "Image loaded into TinyML tensor."
-  );
+  Serial.println("Image loaded into TinyML tensor.");
 
   return true;
-}
-
-void publishClassification(const char* status, const char* error, float probability)
-{
-  // IDs are validated hex strings; status and error are fixed strings below.
-  char result[256];
-  if (strcmp(status, "done") == 0)
-  {
-    snprintf(result, sizeof(result),
-      "{\"leafId\":\"%s\",\"status\":\"done\",\"prediction\":\"%s\",\"probability\":%.4f}",
-      classificationLeafId, probability >= 0.5f ? "DISEASED" : "HEALTHY", probability);
-  }
-  else
-  {
-    snprintf(result, sizeof(result),
-      "{\"leafId\":\"%s\",\"status\":\"%s\",\"error\":\"%s\"}",
-      classificationLeafId, status, error);
-  }
-  Serial.println(result);
-  if (!mqttClient.publish(MQTT_CLASSIFICATION_TOPIC, result, false))
-  {
-    Serial.println("Could not publish classification status; check MQTT connection.");
-  }
 }
 
 void runPlantDiseaseInference(const char* url)
@@ -560,22 +504,13 @@ void runPlantDiseaseInference(const char* url)
 
   if (tflInterpreter->Invoke() != kTfLiteOk)
   {
-    Serial.println(
-      "ERROR: TinyML inference failed."
-    );
+    Serial.println("ERROR: TinyML inference failed.");
     publishClassification("error", "TinyML inference failed. Check Serial Monitor.", 0);
     return;
   }
 
-  int rawOutput =
-    static_cast<int>(
-      tflOutput->data.int8[0]
-    );
-
-  float probability =
-    (rawOutput -
-     tflOutput->params.zero_point)
-    * tflOutput->params.scale;
+  int rawOutput = static_cast<int>(tflOutput->data.int8[0]);
+  float probability = (rawOutput - tflOutput->params.zero_point) * tflOutput->params.scale;
 
   if (!isfinite(probability))
   {
@@ -600,6 +535,29 @@ void runPlantDiseaseInference(const char* url)
   Serial.println(
     "====================================="
   );
+}
+
+void publishClassification(const char* status, const char* error, float probability)
+{
+  // IDs are validated hex strings; status and error are fixed strings below.
+  char result[256];
+  if (strcmp(status, "done") == 0)
+  {
+    snprintf(result, sizeof(result),
+      "{\"leafId\":\"%s\",\"status\":\"done\",\"prediction\":\"%s\",\"probability\":%.4f}",
+      classificationLeafId, probability >= 0.5f ? "DISEASED" : "HEALTHY", probability);
+  }
+  else
+  {
+    snprintf(result, sizeof(result),
+      "{\"leafId\":\"%s\",\"status\":\"%s\",\"error\":\"%s\"}",
+      classificationLeafId, status, error);
+  }
+  Serial.println(result);
+  if (!mqttClient.publish(MQTT_CLASSIFICATION_TOPIC, result, false))
+  {
+    Serial.println("Could not publish classification status; check MQTT connection.");
+  }
 }
 
 void setupHardware()
@@ -668,8 +626,7 @@ void loop()
     ? currentTime - lastThingSpeakUpload >= THINGSPEAK_UPLOAD_INTERVAL
     : currentTime - networkStartTime >= FIRST_UPLOAD_GRACE;
 
-  if (thingSpeakDue && WiFi.status() == WL_CONNECTED &&
-      haveValidDHTReading && !sensorFault)
+  if (thingSpeakDue && WiFi.status() == WL_CONNECTED && haveValidDHTReading && !sensorFault)
   {
     uploadThingSpeak();
     thingSpeakUploadAttempted = true;
@@ -684,7 +641,6 @@ void runLocalAutomation(unsigned long currentTime)
   if (!haveValidDHTReading ||
       currentTime - lastDHTTime >= DHT_READ_INTERVAL)
   {
-
     lastDHTTime = currentTime;
     readDHT22();
   }
@@ -819,7 +775,6 @@ void updateEnvironmentalConditions()
 
 void determinePrimaryState()
 {
-
   if (sensorFault)
   {
     currentState = ALERT;
@@ -854,11 +809,9 @@ void determinePrimaryState()
 
 void updateActuators()
 {
-
   // SENSOR FAULT / ALERT
   if (sensorFault)
   {
-
     // DHT-dependent control is disabled for safety.
     ventOpen = false;
     heaterOn = false;
@@ -880,7 +833,6 @@ void updateActuators()
       - COLD has priority and forces the vent closed.
       - Otherwise HOT or HUMID opens the vent.
     */
-
     if (coldCondition)
     {
       ventOpen = false;
@@ -915,7 +867,6 @@ void updateActuators()
 
 void updatePollingInterval()
 {
-
   if (currentState == NORMAL)
   {
     controlInterval = NORMAL_POLL_INTERVAL;
@@ -930,7 +881,6 @@ void updatePollingInterval()
 
 const char *stateToString()
 {
-
   switch (currentState)
   {
   case NORMAL:
@@ -956,7 +906,6 @@ const char *stateToString()
 
 void printSystemStatus()
 {
-
   Serial.println();
   Serial.println("========== SGAS STATUS ==========");
 
@@ -1128,8 +1077,7 @@ void maintainMQTT()
     mqttClient.loop();
   }
 
-  if (mqttWasConnected &&
-      (WiFi.status() != WL_CONNECTED || !mqttClient.connected()))
+  if (mqttWasConnected && (WiFi.status() != WL_CONNECTED || !mqttClient.connected()))
   {
     mqttWasConnected = false;
     Serial.print("MQTT disconnected. State: ");
